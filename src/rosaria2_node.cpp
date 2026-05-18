@@ -88,6 +88,12 @@ RosAria2Node::RosAria2Node(const std::string& name) :
         // initialize transform broadcaster
         odom_broadcaster = std::make_unique< tf2_ros::TransformBroadcaster >(*this);
 
+        // TF frame names (override via params file under this node's name, e.g. rosaria2.frame_id_odom)
+        frame_id_odom = this->declare_parameter< std::string >("frame_id_odom", "odom");
+        frame_id_base_link = this->declare_parameter< std::string >("frame_id_base_link", "base_link");
+        frame_id_bumper = this->declare_parameter< std::string >("frame_id_bumper", "base_bumper");
+        frame_id_sonar = this->declare_parameter< std::string >("frame_id_sonar", "sonar");
+
         // set initial state for (internal) message buffers
         motors_state.data = false;
 
@@ -209,7 +215,7 @@ int RosAria2Node::setup() {
             }
             tfname += "_frame";
             RCLCPP_INFO(this->get_logger(), "Creating publisher for laser #%d named %s with tf frame name %s", ln, l->getName(), tfname.c_str());
-            new LaserPublisher(l, *this, true, tfname);
+            new LaserPublisher(l, *this, true, tfname, frame_id_base_link, frame_id_odom);
         }
         robot->unlock();
         RCLCPP_INFO(this->get_logger(), "Done creating laser publishers");

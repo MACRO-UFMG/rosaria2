@@ -9,9 +9,6 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# add runtime library path (rquired for 3rd-party/system libraries, *even* if in system folders like /urs/local/lib)
-SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath -Wl,/usr/local/lib")
-
 # find dependencies
 find_package(ament_cmake REQUIRED)
 # uncomment the following section in order to fill in
@@ -28,6 +25,28 @@ find_package(tf2_geometry_msgs REQUIRED)
 # find_package(aria REQUIRED)  --> system package, not configured?
 find_package(rosidl_default_generators REQUIRED)  # for message generation
 
+# ARIA (MobileRobots) — must resolve at configure time and record RPATH for installed binaries
+set(ARIA_LIB_HINTS "")
+if(DEFINED ARIA_LIB_DIR AND ARIA_LIB_DIR)
+  list(APPEND ARIA_LIB_HINTS "${ARIA_LIB_DIR}")
+endif()
+list(APPEND ARIA_LIB_HINTS
+  /usr/local/lib
+  /usr/lib
+  /usr/lib/aarch64-linux-gnu
+  /usr/lib/x86_64-linux-gnu)
+find_library(ARIA_SHARED_LIB
+  NAMES Aria libAria.so.3 libAria.so libAria
+  PATHS ${ARIA_LIB_HINTS}
+  NO_DEFAULT_PATH)
+if(NOT ARIA_SHARED_LIB)
+  find_library(ARIA_SHARED_LIB NAMES Aria libAria.so.3 libAria.so libAria)
+endif()
+if(NOT ARIA_SHARED_LIB)
+  message(FATAL_ERROR "libAria not found. Install ARIA SDK / set LD_LIBRARY_PATH, or pass -DARIA_LIB_DIR=/path/to/dir")
+endif()
+get_filename_component(ARIA_LIBRARY_DIR "${ARIA_SHARED_LIB}" DIRECTORY)
+
 # generate messages
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/BumperState.msg"
@@ -42,8 +61,10 @@ target_include_directories(${PROJECT_NAME}_debug
     $<BUILD_INTERFACE:/usr/local/include/Aria>
     $<INSTALL_INTERFACE:include>)
 
-target_link_libraries(${PROJECT_NAME}_debug Aria)
-# target_link_libraries(${PROJECT_NAME}_debug /usr/local/lib/libAria.so)
+target_link_libraries(${PROJECT_NAME}_debug "${ARIA_SHARED_LIB}")
+set_target_properties(${PROJECT_NAME}_debug PROPERTIES
+  BUILD_RPATH "${ARIA_LIBRARY_DIR}"
+  INSTALL_RPATH "${ARIA_LIBRARY_DIR}")
 ament_target_dependencies(${PROJECT_NAME}_debug rclcpp geometry_msgs std_msgs sensor_msgs nav_msgs std_srvs tf2 tf2_ros tf2_geometry_msgs)
 
 # declare generated messages as dependencies to force generation before compilation
